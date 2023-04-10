@@ -1,0 +1,2 @@
+# smartmirror-server
+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
