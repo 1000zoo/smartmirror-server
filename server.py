@@ -78,7 +78,7 @@ def contains(barcode):
 
 
 ## 받아온 이미지를 저장
-@app.route('/image-upload', methods=['POST'])
+@app.route('/upload-image', methods=['POST'])
 def upload():
     check_dir()                                 ## 혹시 모를 기본 경로 (image-data/) 확인
     file = request.files['file']
