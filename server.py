@@ -22,10 +22,9 @@ patinets-info =>
 
 ## HTTP Response Code
 SUCCESS_CODE = '202'
-DUPLICATED_ERROR_CODE = '409'
 UNKNOWN_ERROR_CODE = '404'
-
-
+DUPLICATED_ERROR_CODE = '409'
+GONE_ERROR_CODE = '410'
 
 app = Flask(__name__)
 
@@ -40,23 +39,42 @@ def check_dir(dir=IMAGE_PATH, dirpath="./"):
         print(f"{dirpath}/{dir}경로 생성")
         os.mkdir(os.path.join(dirpath, dir))
 
+
 ## 환자 정보가 담긴 json 파일 확인 (없을 시 생성)
 def check_json_data():
     if not JSON_FILENAME in os.listdir():
         temp = {"user":[]}
-        with open(JSON_FILENAME, 'w') as f:
-            json.dump(temp, f)
+        with open(JSON_FILENAME, 'w', encoding='utf-8') as f:
+            json.dump(temp, f, indent='\t', ensure_ascii=False)
 
-## PATIENTS 변수에 patients-info.json 데이터 로드
+
+## PATIENTS 변수에 patients-info.json 데이터 불러오기
 def load_patients():
     check_json_data()
     global PATIENTS
     with open(JSON_FILENAME, 'r') as f:
         PATIENTS = json.load(f)
-    
+
+
+## patients-info.json 업데이트
+def update_patients():
+    with open(JSON_FILENAME, 'w', encoding='utf-8') as f:
+        json.dump(PATIENTS, f, indent='\t', ensure_ascii=False)
+
+
 ## 응답 메세지로 변환
 def json_response(success: bool, message=""):
     return jsonify({'success': success, 'message': message})
+
+
+## 이미 저장된 바코드인지 확인하는 메소드
+def contains(barcode):
+    for p in PATIENTS['user']:
+        if p['barcode'] == barcode:
+            return True
+        
+    return False
+
 
 
 ## 받아온 이미지를 저장
@@ -83,13 +101,16 @@ def add_patients_info():
     _data = json.loads(_data)
     bar_info = _data['barcode']
 
+
     ## 중복확인, 중복 시 저장을 하지 않고, 클라이언트에 실패 코드 및 메세지 전송
-    for p in PATIENTS['user']:
-        if p['barcode'] == bar_info:
-            return json_response(
-                False, DUPLICATED_ERROR_CODE
-            )
+    if contains(bar_info):
+        return json_response(
+            False, DUPLICATED_ERROR_CODE
+        )
+
     PATIENTS['user'].append(_data)
+    update_patients()
+    
     return json_response(
         True, SUCCESS_CODE
     )
@@ -97,15 +118,32 @@ def add_patients_info():
 ## 환자 정보 전송
 @app.route('/patients-info', methods=['GET'])
 def send_patients_info():
-    check_json_data()
-    pass
+    load_patients()
+    return jsonify(PATIENTS)
 
 
 ## 환자 정보 수정 (삭제)
-@app.route('/patients-info', methods=['POST'])
-def mod_patients_info():
-    check_json_data()
-    pass
+@app.route('/patients-info/<barcode>', methods=['DELETE'])
+def delete_patients_info(barcode):
+    load_patients()
+
+    for patient in PATIENTS['user']:
+        if patient['barcode'] == barcode:
+            PATIENTS['user'].remove(patient)
+            update_patients()
+            return json_response(
+                True, SUCCESS_CODE
+            )
+
+    return json_response(
+        False, GONE_ERROR_CODE
+    )
+
+@app.route('/patients-info/iscontains/<barcode>', methods=['GET'])
+def is_contains(barcode):
+    load_patients()
+    return json_response(True, SUCCESS_CODE) if contains(barcode) else json_response(False, GONE_ERROR_CODE)
+    
 
 if __name__ == '__main__':
     app.run(host="192.168.0.45", port=5000, debug=True)
