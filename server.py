@@ -4,21 +4,33 @@ import json
 import http
 
 
-
+## TODO 1. 아래의 형식에 맞게 API 수정 해야댐
+## TODO 2. response message 어떻게 해야 직관적이고 효율적일지
+##          => 어떤 곳에서는 TF 리턴하고, 어떤곳에서는 데이터 리턴하고
+##          => Error code 는 statusCode로 flutter에서 확인 가능.
+##          => 내가 원하는 결과에 맞게 statusCode를 수정 가능한지
 """
 patinets-info =>
 {
-    "user": [
-        {
-            "barcode": "12345678",
-            "name"   : "ooo",
-            "gender" : "male",
-            "birth"  : "yyyy-mm-dd"     ## gender와 birth는 없어져도 될듯
-        },
-        {...},{...}...,{...}    
-    ]
+		"98966568" : {
+			"name": "989",
+			"gender": "남자",
+			"birth": "2000-01-01"
+		},
+		"00000000" : {
+			"name": "0",
+			"gender": "남자",
+			"birth": "2000-01-01"
+		},
+		"12345678" : {
+			"name": "12",
+			"gender": "남자",
+			"birth": "2000-01-01"
+		}
 }
 """
+
+
 
 ## HTTP Response Code
 SUCCESS_CODE = '202'
@@ -30,7 +42,7 @@ app = Flask(__name__)
 
 IMAGE_PATH = os.path.join("image-data")  ## 이미지 저장 경로
 JSON_FILENAME = "patients-info.json"    ## 환자 정보 저장 경로
-PATIENTS = {"user":[]}                  ## 중복확인 및 삭제를 위한 임시변수
+PATIENTS = {}                 ## 중복확인 및 삭제를 위한 임시변수
 
 
 ## 이미지 저장 경로 확인 (없을 시 생성)
@@ -43,7 +55,7 @@ def check_dir(dir=IMAGE_PATH, dirpath="./"):
 ## 환자 정보가 담긴 json 파일 확인 (없을 시 생성)
 def check_json_data():
     if not JSON_FILENAME in os.listdir():
-        temp = {"user":[]}
+        temp = {}
         with open(JSON_FILENAME, 'w', encoding='utf-8') as f:
             json.dump(temp, f, indent='\t', ensure_ascii=False)
 
@@ -70,19 +82,13 @@ def json_response(success: bool, message=""):
 
 ## 이미 저장된 바코드인지 확인하는 메소드
 def contains(barcode):
-    for p in PATIENTS['user']:
-        if p['barcode'] == barcode:
-            return True
-        
-    return False
+    return barcode in PATIENTS.keys()
 
 
 ## 환자 이름 찾기
 def get_patients_name(barcode):
-    for p in PATIENTS['user']:
-        if p['barcode'] == barcode:
-            return p['name']
-        
+    if contains(barcode):
+        return PATIENTS[barcode]['name']
     return None
 
 
@@ -104,21 +110,20 @@ def upload():
 
 
 ## 환자 정보 추가
-@app.route('/patients-info', methods=['POST'])
-def add_patients_info():
+@app.route('/patients-info/<barcode>', methods=['POST'])
+def add_patients_info(barcode):
     load_patients()                             ## 환자 정보 로드
     _data = request.data
-    _data = json.loads(_data)
-    bar_info = _data['barcode']
+    _data = json.loads(_data) ## 여기서 values 만 받아오도록 해야댐 [barcode] ?
 
 
     ## 중복확인, 중복 시 저장을 하지 않고, 클라이언트에 실패 코드 및 메세지 전송
-    if contains(bar_info):
+    if contains(barcode):
         return json_response(
             False, DUPLICATED_ERROR_CODE
         )
 
-    PATIENTS['user'].append(_data)
+    PATIENTS[barcode] = _data
     update_patients()
     
     return json_response(
@@ -135,7 +140,7 @@ def send_patients_info():
 @app.route('/patients-info/<barcode>', methods=['GET'])
 def send_patients_name(barcode):
     load_patients()
-    name = get_patients_name(barcode)
+    name = PATIENTS.pop(barcode, False)
 
     if name:
         return name
@@ -149,18 +154,17 @@ def send_patients_name(barcode):
 @app.route('/patients-info/<barcode>', methods=['DELETE'])
 def delete_patients_info(barcode):
     load_patients()
+    result = PATIENTS.pop(barcode, False)
 
-    for patient in PATIENTS['user']:
-        if patient['barcode'] == barcode:
-            PATIENTS['user'].remove(patient)
-            update_patients()
-            return json_response(
-                True, SUCCESS_CODE
-            )
+    if result:
+        return json_response(
+            True, SUCCESS_CODE
+        )
 
-    return json_response(
-        False, GONE_ERROR_CODE
-    )
+    else:
+        return json_response(
+            False, GONE_ERROR_CODE
+        )
 
 @app.route('/patients-info/iscontains/<barcode>', methods=['GET'])
 def is_contains(barcode):
