@@ -64,7 +64,8 @@ def update_patients():
 
 ## 응답 메세지로 변환
 def json_response(success: bool, message=""):
-    return jsonify({'success': success, 'message': message})
+    return f'{1 if success else 0}/{message}'
+    # return jsonify({'success': success, 'message': message})
 
 
 ## 이미 저장된 바코드인지 확인하는 메소드
@@ -74,6 +75,15 @@ def contains(barcode):
             return True
         
     return False
+
+
+## 환자 이름 찾기
+def get_patients_name(barcode):
+    for p in PATIENTS['user']:
+        if p['barcode'] == barcode:
+            return p['name']
+        
+    return None
 
 
 
@@ -120,6 +130,19 @@ def add_patients_info():
 def send_patients_info():
     load_patients()
     return jsonify(PATIENTS)
+
+## 환자 이름 전송
+@app.route('/patients-info/<barcode>', methods=['GET'])
+def send_patients_name(barcode):
+    load_patients()
+    name = get_patients_name(barcode)
+
+    if name:
+        return name
+    else:
+        return json_response(
+            False, DUPLICATED_ERROR_CODE
+        )
 
 
 ## 환자 정보 수정 (삭제)
