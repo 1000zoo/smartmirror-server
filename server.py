@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 import os
 import json
 import http
@@ -31,12 +31,20 @@ patinets-info =>
 """
 
 
-
 ## HTTP Response Code
-SUCCESS_CODE = '202'
-UNKNOWN_ERROR_CODE = '404'
-DUPLICATED_ERROR_CODE = '409'
-GONE_ERROR_CODE = '410'
+SUCCESS_CODE = 200
+UPLOAD_SUCCESS_CODE = 201
+UNKNOWN_ERROR_CODE = 404
+DUPLICATED_ERROR_CODE = 409
+NOT_EXIST_ERROR_CODE = 410
+
+error_dict = {
+    SUCCESS_CODE : "성공",
+    UPLOAD_SUCCESS_CODE : "업로드가 완료되었습니다.",
+    UNKNOWN_ERROR_CODE : "알 수 없는 에러입니다.",
+    DUPLICATED_ERROR_CODE : "이미 등록된 환자입니다.",
+    NOT_EXIST_ERROR_CODE : "없는 환자입니다.",
+}
 
 app = Flask(__name__)
 
@@ -75,8 +83,12 @@ def update_patients():
 
 
 ## 응답 메세지로 변환
-def json_response(success: bool, message=""):
-    return f'{1 if success else 0}/{message}'
+def get_response(code, data=None):
+    if not data:
+        response = '{"msg":' + error_dict[code] + "}"
+    else:
+        response = '{"msg":' + str(data) + "}"
+    return Response(response, status=code)
     # return jsonify({'success': success, 'message': message})
 
 
@@ -92,85 +104,101 @@ def get_patients_name(barcode):
     return None
 
 
-
 ## 받아온 이미지를 저장
 @app.route('/upload-image', methods=['POST'])
 def upload():
-    check_dir()                                 ## 혹시 모를 기본 경로 (image-data/) 확인
-    file = request.files['file']
-    filename = file.filename                    ## 이미지 및 파일명 로드 (파일명: 이름-바코드_날짜-시간)
-    name, filename = filename.split("_")
-    save_path = os.path.join(IMAGE_PATH, name)  ## 저장 경로 생성  
-    check_dir(name, IMAGE_PATH)                 ## 저장 경로 확인
+    try:
+        check_dir()                                 ## 혹시 모를 기본 경로 (image-data/) 확인
+        file = request.files['file']
+        filename = file.filename                    ## 이미지 및 파일명 로드 (파일명: 이름-바코드_날짜-시간)
+        name, filename = filename.split("_")
+        save_path = os.path.join(IMAGE_PATH, name)  ## 저장 경로 생성  
+        check_dir(name, IMAGE_PATH)                 ## 저장 경로 확인
 
-    file.save(os.path.join(save_path, filename))## 파일 저장
-    return json_response(
-        True, SUCCESS_CODE
-    )
+        file.save(os.path.join(save_path, filename))## 파일 저장
+        return get_response(UPLOAD_SUCCESS_CODE)
+    except:
+        return get_response(UNKNOWN_ERROR_CODE)
+
+
+## 환자 정보 전송
+@app.route('/patients-info', methods=['GET'])
+def send_patients_info():
+    try:
+        load_patients()
+        data = json.dumps(PATIENTS)
+        return get_response(SUCCESS_CODE, data)
+    
+    except:
+        return get_response(UNKNOWN_ERROR_CODE)
 
 
 ## 환자 정보 추가
 @app.route('/patients-info/<barcode>', methods=['POST'])
 def add_patients_info(barcode):
-    load_patients()                             ## 환자 정보 로드
-    _data = request.data
-    _data = json.loads(_data) ## 여기서 values 만 받아오도록 해야댐 [barcode] ?
+    try:
+        load_patients()                             ## 환자 정보 로드
+        _data = request.data
+        _data = json.loads(_data) ## 여기서 values 만 받아오도록 해야댐 [barcode] ?
 
 
-    ## 중복확인, 중복 시 저장을 하지 않고, 클라이언트에 실패 코드 및 메세지 전송
-    if contains(barcode):
-        return json_response(
-            False, DUPLICATED_ERROR_CODE
-        )
+        ## 중복확인, 중복 시 저장을 하지 않고, 클라이언트에 실패 코드 및 메세지 전송
+        if contains(barcode):
+            return get_response(DUPLICATED_ERROR_CODE)
 
-    PATIENTS[barcode] = _data
-    update_patients()
+        PATIENTS[barcode] = _data
+        update_patients()
+        
+        return get_response(SUCCESS_CODE)
     
-    return json_response(
-        True, SUCCESS_CODE
-    )
+    except:
+        return get_response(UNKNOWN_ERROR_CODE)
 
-## 환자 정보 전송
-@app.route('/patients-info', methods=['GET'])
-def send_patients_info():
-    load_patients()
-    return jsonify(PATIENTS)
 
 ## 환자 이름 전송
 @app.route('/patients-info/<barcode>', methods=['GET'])
 def send_patients_name(barcode):
-    load_patients()
-    name = PATIENTS.pop(barcode, False)
+    try:
+        load_patients()
+        name = PATIENTS.pop(barcode, False)
 
-    if name:
-        return name
-    else:
-        return json_response(
-            False, DUPLICATED_ERROR_CODE
-        )
+        if name:
+            return get_response(SUCCESS_CODE, name)
+        else:
+            return get_response(NOT_EXIST_ERROR_CODE)
+        
+    except:
+        return get_response(UNKNOWN_ERROR_CODE)
 
 
 ## 환자 정보 수정 (삭제)
 @app.route('/patients-info/<barcode>', methods=['DELETE'])
 def delete_patients_info(barcode):
-    load_patients()
-    result = PATIENTS.pop(barcode, False)
+    try:
+        load_patients()
+        result = PATIENTS.pop(barcode, False)
+        update_patients()
 
-    if result:
-        return json_response(
-            True, SUCCESS_CODE
-        )
+        if result:
+            return get_response(SUCCESS_CODE)
 
-    else:
-        return json_response(
-            False, GONE_ERROR_CODE
-        )
+        else:
+            return get_response(NOT_EXIST_ERROR_CODE)
+        
+    except:
+        return get_response(UNKNOWN_ERROR_CODE)
 
+
+## 환자 찾기 (등록 유무 확인)
 @app.route('/patients-info/iscontains/<barcode>', methods=['GET'])
 def is_contains(barcode):
-    load_patients()
-    return json_response(True, SUCCESS_CODE) if contains(barcode) else json_response(False, GONE_ERROR_CODE)
-    
+    try:
+        load_patients()
+        return get_response(SUCCESS_CODE) if contains(barcode) else get_response(NOT_EXIST_ERROR_CODE)
+    except:
+        return get_response(UNKNOWN_ERROR_CODE)
+
 
 if __name__ == '__main__':
-    app.run(host="192.168.0.45", port=5000, debug=True)
+    # app.run(host="192.168.0.45", port=5000, debug=True)
+    app.run(host="192.168.0.10", port=5000, debug=True)
