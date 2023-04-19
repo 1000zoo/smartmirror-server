@@ -39,11 +39,11 @@ DUPLICATED_ERROR_CODE = 409
 NOT_EXIST_ERROR_CODE = 410
 
 error_dict = {
-    SUCCESS_CODE : "성공",
+    SUCCESS_CODE : "작업이 완료되었습니다.",
     UPLOAD_SUCCESS_CODE : "업로드가 완료되었습니다.",
     UNKNOWN_ERROR_CODE : "알 수 없는 에러입니다.",
     DUPLICATED_ERROR_CODE : "이미 등록된 환자입니다.",
-    NOT_EXIST_ERROR_CODE : "없는 환자입니다.",
+    NOT_EXIST_ERROR_CODE : "등록되지 않은 바코드입니다.",
 }
 
 app = Flask(__name__)
@@ -85,7 +85,7 @@ def update_patients():
 ## 응답 메세지로 변환
 def get_response(code, data=None):
     if not data:
-        response = '{"msg":' + error_dict[code] + "}"
+        response = '{"msg":' + f'"{error_dict[code]}"' + "}"
     else:
         response = '{"msg":' + str(data) + "}"
     return Response(response, status=code)
@@ -141,6 +141,7 @@ def add_patients_info(barcode):
         _data = request.data
         _data = json.loads(_data) ## 여기서 values 만 받아오도록 해야댐 [barcode] ?
 
+        print(barcode)
 
         ## 중복확인, 중복 시 저장을 하지 않고, 클라이언트에 실패 코드 및 메세지 전송
         if contains(barcode):
@@ -160,7 +161,8 @@ def add_patients_info(barcode):
 def send_patients_name(barcode):
     try:
         load_patients()
-        name = PATIENTS.pop(barcode, False)
+        name = PATIENTS.pop(barcode, False)["name"]
+        print(name)
 
         if name:
             return get_response(SUCCESS_CODE, name)
@@ -200,5 +202,5 @@ def is_contains(barcode):
 
 
 if __name__ == '__main__':
-    # app.run(host="192.168.0.45", port=5000, debug=True)
-    app.run(host="192.168.0.10", port=5000, debug=True)
+    app.run(host="192.168.0.45", port=8080, debug=True)
+    # app.run(host="192.168.0.10", port=5000, debug=True)
