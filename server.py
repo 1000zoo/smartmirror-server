@@ -34,6 +34,8 @@ patinets-info =>
 ## HTTP Response Code
 SUCCESS_CODE = 200
 UPLOAD_SUCCESS_CODE = 201
+LOAD_SUCCESS_CODE = 202
+JSON_LOAD_SUCCESS_CODE = 203
 UNKNOWN_ERROR_CODE = 404
 DUPLICATED_ERROR_CODE = 409
 NOT_EXIST_ERROR_CODE = 410
@@ -87,9 +89,10 @@ def get_response(code, data=None):
     if not data:
         response = '{"msg":' + f'"{error_dict[code]}"' + "}"
     else:
-        response = '{"msg":' + str(data) + "}"
+        ## 보내는 데이터가 JSON 형식이라면 데이터만 보내고
+        ## 아니라면 "msg" 에 감싸서 보낸다.
+        response = str(data) if code == JSON_LOAD_SUCCESS_CODE else '{"msg":' + f'"{str(data)}"' + "}"
     return Response(response, status=code)
-    # return jsonify({'success': success, 'message': message})
 
 
 ## 이미 저장된 바코드인지 확인하는 메소드
@@ -127,7 +130,7 @@ def send_patients_info():
     try:
         load_patients()
         data = json.dumps(PATIENTS)
-        return get_response(SUCCESS_CODE, data)
+        return get_response(JSON_LOAD_SUCCESS_CODE, data)
     
     except:
         return get_response(UNKNOWN_ERROR_CODE)
@@ -162,10 +165,8 @@ def send_patients_name(barcode):
     try:
         load_patients()
         name = PATIENTS.pop(barcode, False)["name"]
-        print(name)
-
         if name:
-            return get_response(SUCCESS_CODE, name)
+            return get_response(LOAD_SUCCESS_CODE, name)
         else:
             return get_response(NOT_EXIST_ERROR_CODE)
         
@@ -201,6 +202,6 @@ def is_contains(barcode):
         return get_response(UNKNOWN_ERROR_CODE)
 
 
-if __name__ == '__main__':
+if __name__ == '__main__': 
     app.run(host="192.168.0.45", port=8080, debug=True)
     # app.run(host="192.168.0.10", port=5000, debug=True)
