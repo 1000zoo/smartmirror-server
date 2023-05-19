@@ -235,3 +235,5 @@ def shot_list(barcode) -> Response:
 if __name__ == '__main__': 
     app.run(host="192.168.0.45", port=8080, debug=True)
     # app.run(host="192.168.0.10", port=5000, debug=True)
+
+
