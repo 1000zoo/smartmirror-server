@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, Response
+from datetime import datetime
 import os
 import json
 import http
@@ -53,6 +54,7 @@ app = Flask(__name__)
 IMAGE_PATH = os.path.join("image-data")  ## 이미지 저장 경로
 JSON_FILENAME = "patients-info.json"    ## 환자 정보 저장 경로
 PATIENTS = {}                 ## 중복확인 및 삭제를 위한 임시변수
+RECENT_FILE = "recent.txt"
 
 
 ## 이미지 저장 경로 확인 (없을 시 생성)
@@ -106,6 +108,11 @@ def get_patients_name(barcode):
         return PATIENTS[barcode]['name']
     return None
 
+## 현재 날짜 기록
+def write_date(path):
+    with open(os.path.join(path, "recent_date.txt"), 'w') as f:
+        f.write(str(datetime.now().date()))
+        
 
 ## 받아온 이미지를 저장
 @app.route('/upload-image', methods=['POST'])
@@ -117,7 +124,7 @@ def upload():
         name, filename = filename.split("_")
         save_path = os.path.join(IMAGE_PATH, name)  ## 저장 경로 생성  
         check_dir(name, IMAGE_PATH)                 ## 저장 경로 확인
-
+        write_date(save_path)
         file.save(os.path.join(save_path, filename))## 파일 저장
         return get_response(UPLOAD_SUCCESS_CODE)
     except:
@@ -184,7 +191,6 @@ def delete_patients_info(barcode):
 
         if result:
             return get_response(SUCCESS_CODE)
-
         else:
             return get_response(NOT_EXIST_ERROR_CODE)
         
@@ -198,6 +204,30 @@ def is_contains(barcode):
     try:
         load_patients()
         return get_response(SUCCESS_CODE) if contains(barcode) else get_response(NOT_EXIST_ERROR_CODE)
+    
+    except:
+        return get_response(UNKNOWN_ERROR_CODE)
+    
+
+## 오늘 사진을 찍었는지 확인
+@app.route('/shot-list/<barcode>', methods=['GET'])
+def shot_list(barcode) -> Response:
+    try:
+        load_patients()
+        patient = PATIENTS[barcode]['name']
+        folder = f"{patient}-{barcode}"
+        path = os.path.join(IMAGE_PATH, folder)
+        file = os.path.join(path, RECENT_FILE)
+
+        try:
+            with open(file, 'r') as f:
+                recent_date = f.read()
+                today = recent_date == str(datetime.now().date())
+                return get_response(SUCCESS_CODE, True) if today else get_response(SUCCESS_CODE, False)
+
+        except:
+            return get_response(SUCCESS_CODE, False)
+
     except:
         return get_response(UNKNOWN_ERROR_CODE)
 
