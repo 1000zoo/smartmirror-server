@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, Response
+from datetime import datetime
 import os
 import json
 import http
@@ -34,16 +35,18 @@ patinets-info =>
 ## HTTP Response Code
 SUCCESS_CODE = 200
 UPLOAD_SUCCESS_CODE = 201
+LOAD_SUCCESS_CODE = 202
+JSON_LOAD_SUCCESS_CODE = 203
 UNKNOWN_ERROR_CODE = 404
 DUPLICATED_ERROR_CODE = 409
 NOT_EXIST_ERROR_CODE = 410
 
 error_dict = {
-    SUCCESS_CODE : "성공",
+    SUCCESS_CODE : "작업이 완료되었습니다.",
     UPLOAD_SUCCESS_CODE : "업로드가 완료되었습니다.",
     UNKNOWN_ERROR_CODE : "알 수 없는 에러입니다.",
     DUPLICATED_ERROR_CODE : "이미 등록된 환자입니다.",
-    NOT_EXIST_ERROR_CODE : "없는 환자입니다.",
+    NOT_EXIST_ERROR_CODE : "등록되지 않은 바코드입니다.",
 }
 
 app = Flask(__name__)
@@ -51,6 +54,7 @@ app = Flask(__name__)
 IMAGE_PATH = os.path.join("image-data")  ## 이미지 저장 경로
 JSON_FILENAME = "patients-info.json"    ## 환자 정보 저장 경로
 PATIENTS = {}                 ## 중복확인 및 삭제를 위한 임시변수
+RECENT_FILE = "recent.txt"
 
 
 ## 이미지 저장 경로 확인 (없을 시 생성)
@@ -85,11 +89,12 @@ def update_patients():
 ## 응답 메세지로 변환
 def get_response(code, data=None):
     if not data:
-        response = '{"msg":' + error_dict[code] + "}"
+        response = '{"msg":' + f'"{error_dict[code]}"' + "}"
     else:
-        response = '{"msg":' + str(data) + "}"
+        ## 보내는 데이터가 JSON 형식이라면 데이터만 보내고
+        ## 아니라면 "msg" 에 감싸서 보낸다.
+        response = str(data) if code == JSON_LOAD_SUCCESS_CODE else '{"msg":' + f'"{str(data)}"' + "}"
     return Response(response, status=code)
-    # return jsonify({'success': success, 'message': message})
 
 
 ## 이미 저장된 바코드인지 확인하는 메소드
@@ -103,6 +108,11 @@ def get_patients_name(barcode):
         return PATIENTS[barcode]['name']
     return None
 
+## 현재 날짜 기록
+def write_date(path):
+    with open(os.path.join(path, "recent_date.txt"), 'w') as f:
+        f.write(str(datetime.now().date()))
+        
 
 ## 받아온 이미지를 저장
 @app.route('/upload-image', methods=['POST'])
@@ -114,7 +124,7 @@ def upload():
         name, filename = filename.split("_")
         save_path = os.path.join(IMAGE_PATH, name)  ## 저장 경로 생성  
         check_dir(name, IMAGE_PATH)                 ## 저장 경로 확인
-
+        write_date(save_path)
         file.save(os.path.join(save_path, filename))## 파일 저장
         return get_response(UPLOAD_SUCCESS_CODE)
     except:
@@ -127,7 +137,7 @@ def send_patients_info():
     try:
         load_patients()
         data = json.dumps(PATIENTS)
-        return get_response(SUCCESS_CODE, data)
+        return get_response(JSON_LOAD_SUCCESS_CODE, data)
     
     except:
         return get_response(UNKNOWN_ERROR_CODE)
@@ -141,6 +151,7 @@ def add_patients_info(barcode):
         _data = request.data
         _data = json.loads(_data) ## 여기서 values 만 받아오도록 해야댐 [barcode] ?
 
+        print(barcode)
 
         ## 중복확인, 중복 시 저장을 하지 않고, 클라이언트에 실패 코드 및 메세지 전송
         if contains(barcode):
@@ -160,10 +171,9 @@ def add_patients_info(barcode):
 def send_patients_name(barcode):
     try:
         load_patients()
-        name = PATIENTS.pop(barcode, False)
-
+        name = PATIENTS.pop(barcode, False)["name"]
         if name:
-            return get_response(SUCCESS_CODE, name)
+            return get_response(LOAD_SUCCESS_CODE, name)
         else:
             return get_response(NOT_EXIST_ERROR_CODE)
         
@@ -181,7 +191,6 @@ def delete_patients_info(barcode):
 
         if result:
             return get_response(SUCCESS_CODE)
-
         else:
             return get_response(NOT_EXIST_ERROR_CODE)
         
@@ -195,10 +204,36 @@ def is_contains(barcode):
     try:
         load_patients()
         return get_response(SUCCESS_CODE) if contains(barcode) else get_response(NOT_EXIST_ERROR_CODE)
+    
+    except:
+        return get_response(UNKNOWN_ERROR_CODE)
+    
+
+## 오늘 사진을 찍었는지 확인
+@app.route('/shot-list/<barcode>', methods=['GET'])
+def shot_list(barcode) -> Response:
+    try:
+        load_patients()
+        patient = PATIENTS[barcode]['name']
+        folder = f"{patient}-{barcode}"
+        path = os.path.join(IMAGE_PATH, folder)
+        file = os.path.join(path, RECENT_FILE)
+
+        try:
+            with open(file, 'r') as f:
+                recent_date = f.read()
+                today = recent_date == str(datetime.now().date())
+                return get_response(SUCCESS_CODE, True) if today else get_response(SUCCESS_CODE, False)
+
+        except:
+            return get_response(SUCCESS_CODE, False)
+
     except:
         return get_response(UNKNOWN_ERROR_CODE)
 
 
-if __name__ == '__main__':
-    # app.run(host="192.168.0.45", port=5000, debug=True)
-    app.run(host="192.168.0.10", port=5000, debug=True)
+if __name__ == '__main__': 
+    app.run(host="192.168.0.45", port=8080, debug=True)
+    # app.run(host="192.168.0.10", port=5000, debug=True)
+
+
