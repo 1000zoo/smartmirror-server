@@ -2,14 +2,9 @@ from flask import Flask, request, jsonify, Response
 from datetime import datetime
 import os
 import json
-import http
+from threading import Lock
 
 
-## TODO 1. 아래의 형식에 맞게 API 수정 해야댐
-## TODO 2. response message 어떻게 해야 직관적이고 효율적일지
-##          => 어떤 곳에서는 TF 리턴하고, 어떤곳에서는 데이터 리턴하고
-##          => Error code 는 statusCode로 flutter에서 확인 가능.
-##          => 내가 원하는 결과에 맞게 statusCode를 수정 가능한지
 """
 patinets-info =>
 {
@@ -41,7 +36,7 @@ UNKNOWN_ERROR_CODE = 404
 DUPLICATED_ERROR_CODE = 409
 NOT_EXIST_ERROR_CODE = 410
 
-error_dict = {
+code_dict = {
     SUCCESS_CODE : "작업이 완료되었습니다.",
     UPLOAD_SUCCESS_CODE : "업로드가 완료되었습니다.",
     UNKNOWN_ERROR_CODE : "알 수 없는 에러입니다.",
@@ -55,6 +50,8 @@ IMAGE_PATH = os.path.join("image-data")  ## 이미지 저장 경로
 JSON_FILENAME = "patients-info.json"    ## 환자 정보 저장 경로
 PATIENTS = {}                 ## 중복확인 및 삭제를 위한 임시변수
 RECENT_FILE = "recent.txt"
+
+data_lock = Lock()
 
 
 ## 이미지 저장 경로 확인 (없을 시 생성)
@@ -89,11 +86,12 @@ def update_patients():
 ## 응답 메세지로 변환
 def get_response(code, data=None):
     if not data:
-        response = '{"msg":' + f'"{error_dict[code]}"' + "}"
+        response = '{"msg":' + f'"{code_dict[code]}"' + "}"
     else:
         ## 보내는 데이터가 JSON 형식이라면 데이터만 보내고
         ## 아니라면 "msg" 에 감싸서 보낸다.
         response = str(data) if code == JSON_LOAD_SUCCESS_CODE else '{"msg":' + f'"{str(data)}"' + "}"
+
     return Response(response, status=code)
 
 
@@ -110,7 +108,7 @@ def get_patients_name(barcode):
 
 ## 현재 날짜 기록
 def write_date(path):
-    with open(os.path.join(path, "recent_date.txt"), 'w') as f:
+    with open(os.path.join(path, RECENT_FILE), 'w') as f:
         f.write(str(datetime.now().date()))
         
 
@@ -149,9 +147,8 @@ def add_patients_info(barcode):
     try:
         load_patients()                             ## 환자 정보 로드
         _data = request.data
-        _data = json.loads(_data) ## 여기서 values 만 받아오도록 해야댐 [barcode] ?
+        _data = json.loads(_data) ## 여기서 values 만 받아오도록 해야댐 [barcode]
 
-        print(barcode)
 
         ## 중복확인, 중복 시 저장을 하지 않고, 클라이언트에 실패 코드 및 메세지 전송
         if contains(barcode):
@@ -210,8 +207,8 @@ def is_contains(barcode):
     
 
 ## 오늘 사진을 찍었는지 확인
-@app.route('/shot-list/<barcode>', methods=['GET'])
-def shot_list(barcode) -> Response:
+@app.route('/shot-today/<barcode>', methods=['GET'])
+def shot_today(barcode) -> Response:
     try:
         load_patients()
         patient = PATIENTS[barcode]['name']
