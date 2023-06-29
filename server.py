@@ -54,10 +54,21 @@ RECENT_FILE = "recent.txt"
 data_lock = Lock()
 
 
+def get_datetime():
+    return str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+def logger(msg):
+    msg = str(msg)
+    time = get_datetime()
+    
+    os.system('echo ' + time + "::: " + msg)
+
+
 ## 이미지 저장 경로 확인 (없을 시 생성)
 def check_dir(dir=IMAGE_PATH, dirpath="./"):
     if not dir in os.listdir(dirpath):
-        print(f"{dirpath}/{dir}경로 생성")
+        msg = f"{dirpath}/{dir}경로 생성"
+        logger(msg)
         os.mkdir(os.path.join(dirpath, dir))
 
 
