@@ -46,7 +46,7 @@ code_dict = {
 
 app = Flask(__name__)
 
-IMAGE_PATH = os.path.join("image-data")  ## 이미지 저장 경로
+IMAGE_PATH = os.path.join("/home/ni3/Desktop", "image-data")  ## 이미지 저장 경로
 JSON_FILENAME = "patients-info.json"    ## 환자 정보 저장 경로
 PATIENTS = {}                 ## 중복확인 및 삭제를 위한 임시변수
 RECENT_FILE = "recent.txt"
