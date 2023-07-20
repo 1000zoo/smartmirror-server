@@ -2,3 +2,8 @@ image-data/
 patients-info.json
 *.png
 *.jpg
+
+test.py
+test.txt
+client-test.py
+__pycache__/
