@@ -118,6 +118,7 @@ def get_patients_name(barcode):
     return None
 
 ## 현재 날짜 기록
+## 당일 촬영했는 지 확인하기 위한 메소드
 def write_date(path):
     with open(os.path.join(path, RECENT_FILE), 'w') as f:
         f.write(str(datetime.now().date()))
